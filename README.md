@@ -1,9 +1,9 @@
 # MyQ-Universal
 Port of @brbeaird's MyQ Lite 3.1.0 to universal HE/ST, plus the addition of Acceleration Sensor support
 
-The optimal use of this driver is with some form of a Contact / Tilt Sensor plus an Activity (acceleration) Sensor. THere are several ways to configure this:
+The optimal use of this driver is with some form of a Contact / Tilt Sensor plus an Activity (acceleration) Sensor, but there are multiple options with this new implementation:
 
-* Use ONLY a Tilt Sensor (like the EcoLink), or a Contact Sensor  Magnet by itself. You won't get "opening", "closing", or "waiting" status with this configuration, but you will know when the door is open and closed.
+* Use ONLY a Tilt Sensor (like the EcoLink), or a Contact Sensor with its Magnet by itself. You won't get "opening", "closing", or "waiting" status with this configuration, but you will know when the door is open and closed.
 * Use a Tilt Sensor, plus a separate Activity (`acceleration`) sensor. With this setup (and each of the configuration below), you will get the full range of status updates:
    - "closed" --> "opening" --> "open" --> "waiting" --> "closing" --> "closed)
 * Use any of the SmartThings/SmartSense Multipurpose sensors for BOTH of these purposes. To do this, you will need to 
