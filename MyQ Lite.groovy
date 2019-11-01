@@ -18,8 +18,8 @@
  *
  */
 
-String appVersion() { return "3.1.0" }
-String appModified() { return "2019-10-18"}
+String appVersion() { return "3.1.1bab" }
+String appModified() { return "2019-11-01"}
 String appAuthor() { return "Brian Beaird" }
 String gitBranch() { return "brbeaird" }
 String getAppImg(imgName) 	{ return "https://raw.githubusercontent.com/${gitBranch()}/SmartThings_MyQ/master/icons/$imgName" }
@@ -325,17 +325,12 @@ def sensorPage() {
                     	app.updateSetting("door${sensorCounter}SensorActivity", [value: false, type: "bool"])
                     }
 				}
-				//if (!settings."door${sensorCounter}SensorActivity" && (settings."door${sensorCounter}Activity" == settings."door${sensorCounter}Sensor")) {
-				//	app.removeSetting("door${sensorCounter}Activity")
-				//}
                 if (isDebug) log.debug "${state.MyQDataPending[door].name}-> 3activity: "+settings."door${sensorCounter}Activity"?.id+", sensor: "+settings."door${sensorCounter}Sensor"?.id+", sensAct: "+settings."door${sensorCounter}SensorActivity"
 				if ((settings."door${sensorCounter}Sensor" && !settings."door${sensorCounter}SensorActivity") ||
                 	!settings."door${sensorCounter}Sensor") { // || !settings."door${sensorCounter}SensorActivity") {
                     if (isDebug) log.debug "${state.MyQDataPending[door].name}-> Activity should be enabled"
 					input "door${sensorCounter}Activity", "capability.accelerationSensor", required: (state."needASensor${sensorCounter}" ?: false), multiple: false, title: state.MyQDataPending[door].name + " Activity Sensor",
 						  submitOnChange: true
-                    //state."door${sensorCounter}ActivityThreeD" = settings."door${sensorCounter}Activity" ? settings."door${sensorCounter}ActivityThreeD" : false
-                    //settings."door${sensorCounter}ActivityThreeD" = state."door${sensorCounter}ActivityThreeD"
                     if (isDebug) log.debug "${state.MyQDataPending[door].name}-> 4activity: "+settings."door${sensorCounter}Activity"?.id+", sensor: "+settings."door${sensorCounter}Sensor"?.id+", sensAct: "+settings."door${sensorCounter}SensorActivity"
 					if (settings."door${sensorCounter}Activity" 
 						&& settings."door${sensorCounter}Sensor" 
@@ -343,26 +338,19 @@ def sensorPage() {
                         if (isDebug) log.debug "${state.MyQDataPending[door].name}-> same"
                        	app.updateSetting("door${sensorCounter}SensorActivity", [value: true, type: "bool"])
                         app.updateSetting("door${sensorCounter}Activity", "")
-                    } else {
-                    	// app.updateSetting("door${sensorCounter}SensorActivity", false)
                     }
                     if (!settings."door${sensorCounter}Activity" ) app.updateSetting("door${sensorCounter}ActivityThreeD", [value: false, type: "bool"])
-					//if ((settings."door${sensorCounter}Activity") && isDebug) paragraph "Using " + settings."door${sensorCounter}Activity".displayName + " as the Activity Sensor"
 					if (!settings["door${sensorCounter}Sensor"]) {
 						if (settings["door${sensorCounter}Activity"] && settings["door${sensorCounter}Activity"].hasAttribute('threeAxis')) {
 							input "door${sensorCounter}ActivityThreeD", "bool", defaultValue: settings."door${sensorCounter}ActivityThreeD", 
                             	  title: "Also use ${settings["door${sensorCounter}Activity"].displayName} as the 3D Sensor?",
 								  submitOnChange: true, required: (state."needASensor${sensorCounter}" ?: true)
-                            //log.debug "Settings: " + settings."door${sensorCounter}ActivityThreeD"
-                            //state."door${sensorCounter}ActivityThreeD" = (settings."door${sensorCounter}ActivityThreeD" != null) ? settings."door${sensorCounter}ActivityThreeD" : false
-                            //log.debug "State: " + state."door${sensorCounter}ActivityThreeD"
 							if (settings."door${sensorCounter}Activity" && !settings."door${sensorCounter}ActivityThreeD" && !settings."door${sensorCounter}Sensor") {
 								paragraph "${HE?'<b>':''}WARNING: ${app.label} will not operate reliably without a Contact Sensor -OR- a 3D Sensor. Please select one or the other.${HE?'</b>':''}"
 								state."needASensor${sensorCounter}" = true
 							}
 							if (settings."door${sensorCounter}ActivityThreeD") {
 								settings."door${sensorCounter}ThreeD" = settings."door${sensorCounter}Activity"
-								//if (isDebug) paragraph "Using " + settings."door${sensorCounter}ThreeD".displayName + " as the ThreeD Sensor"
 							}
 						} else {
                         	app.updateSetting("door${sensorCounter}ActivityThreeD", [value: false, type: "bool"])
@@ -384,8 +372,6 @@ def sensorPage() {
                       "\n * A Contact (or Tilt) Sensor, optionally with a separate Activity Sensor" +
 					  "\n * A multi-sensor configured as a Contact Sensor, optionally also acting as an Activity Sensor" +
 					  "\n * A multi-sensor acting as an Activity Sensor, and also using its 3D Sensor to emulate a Tilt/Contact Sensor"
-			//paragraph "These also help the device function as a switch so that you can turn on (to open) and off " +
-			//		  "(to close) in other automations and SmartApps."
            	paragraph "In addition, you can choose to create separate On/Open and Off/Close push button devices. This is recommened if you" +
 					  "want a way to open/close the garage door from interfaces like Google Home that can't function with the built-in open/close or on/off capability."
 			paragraph "See wiki for more details (need URL)"
@@ -603,6 +589,9 @@ def initialize() {
         createChilDevices(door, theSensor, state.data[door].name, settings["prefDoor${doorCounter}PushButtons"])
         doorCounter++
     }
+	boolean sameSame = state.data[door].sensor ? (state.data[door].sensor == state.data[door].activity) 
+            										   : (state.data[door].activity ? (state.data[door].activity == state.data[door].threed) : false)
+	state.sameSame = sameSame	// so we don't have to calculate this over and over again
     state.lastSuccessfulStep = "Door device creation"
 
 
@@ -670,6 +659,7 @@ def initialize() {
 					catch (e)
 					{
 						log.error "Error trying to delete device: ${child} - ${e}\nDevice is likely in use in a Routine, or SmartApp (make sure and check Alexa, ActionTiles, etc.)."
+						throw e		// The default error handler will give us the line number and additional information.
 					}
 				}
 			}
@@ -727,9 +717,10 @@ def createChilDevices(door, sensor, doorName, prefPushButtons){
 	boolean ST = ((atomicState?.isST != null) ? atomicState.isST : isST)
 	boolean HE = !ST
 	
-    def sensorTypeName = "MyQ Garage Door Opener"
-    def noSensorTypeName = "MyQ Garage Door Opener-NoSensor"
-    def lockTypeName = "MyQ Lock Door"
+    String sensorTypeName = "MyQ Garage Door Opener"
+    String noSensorTypeName = "MyQ Garage Door Opener-NoSensor"
+    String lockTypeName = "MyQ Lock Door"
+	String installMsg = ""	// we'll pre-pend this to the state.installMsg once we are done creating things
 
     if (door){
 
@@ -742,20 +733,19 @@ def createChilDevices(door, sensor, doorName, prefPushButtons){
 
         if (existingDev){
         	if (isDebug) log.debug "Child already exists for " + doorName + ". Sensor name is: " + sensor
-            state.installMsg = state.installMsg + doorName + ": door device already exists. \r\n\r\n"
+            installMsg = installMsg + doorName + ": door device already exists. \r\n\r\n"
 
             if (prefUseLockType && existingType != lockTypeName){
                 try{
                     if (isDebug) log.debug "Type needs updating to Lock version"
                     existingDev.deviceType = lockTypeName
-                    state.installMsg = state.installMsg + doorName + ": changed door device to lock version." + "\r\n\r\n"
+                    installMsg = installMsg + doorName + ": changed door device to lock version." + "\r\n\r\n"
                 }
-                //catch(hubitat.exception.NotFoundException e)
 				catch (Exception e) 
                 {
 					if ("${e}".startsWith("${ST?'physicalgraph':'hubitat'}.exception.NotFoundException")) { 
                     	log.error "Error! " + e
-                    	state.installMsg = state.installMsg + doorName + ": problem changing door to no-sensor type. Check your IDE to make sure the brbeaird : " + lockTypeName + 
+                    	installMsg = installMsg + doorName + ": problem changing door to no-sensor type. Check your IDE to make sure the brbeaird : " + lockTypeName + 
 											" device handler is installed and published. \r\n\r\n"
 					} else throw e
                 }
@@ -764,14 +754,13 @@ def createChilDevices(door, sensor, doorName, prefPushButtons){
             	try{
                     if (isDebug) log.debug "Type needs updating to no-sensor version"
                     existingDev.deviceType = noSensorTypeName
-                    state.installMsg = state.installMsg + doorName + ": changed door device to No-sensor version." + "\r\n\r\n"
+                    installMsg = installMsg + doorName + ": changed door device to No-sensor version." + "\r\n\r\n"
                 }
-                //catch(hubitat.exception.NotFoundException e)
 				catch (Exception e) 
                 {
 					if ("${e}".startsWith("${ST?'physicalgraph':'hubitat'}.exception.NotFoundException")) { 
                     	log.error "Error! " + e
-                    	state.installMsg = state.installMsg + doorName + ": problem changing door to no-sensor type. Check your IDE to make sure the brbeaird : " + noSensorTypeName + 
+                    	installMsg = installMsg + doorName + ": problem changing door to no-sensor type. Check your IDE to make sure the brbeaird : " + noSensorTypeName + 
 											" device handler is installed and published. \r\n\r\n"
 					} else throw e
                 }
@@ -781,14 +770,13 @@ def createChilDevices(door, sensor, doorName, prefPushButtons){
             	try{
                     if (isDebug) log.debug "Type needs updating to sensor version"
                     existingDev.deviceType = sensorTypeName
-                    state.installMsg = state.installMsg + doorName + ": changed door device to sensor version." + "\r\n\r\n"
+                    installMsg = installMsg + doorName + ": changed door device to sensor version." + "\r\n\r\n"
                 }
-                //catch(hubitat.exception.NotFoundException e)
 				catch (Exception e) 
                 {
 					if ("${e}".startsWith("${ST?'physicalgraph':'hubitat'}.exception.NotFoundException")) { 
                     	log.error "Error! " + e
-                    	state.installMsg = state.installMsg + doorName + ": problem changing door to sensor type. Check your IDE to make sure the brbeaird : " + sensorTypeName + 
+                    	installMsg = installMsg + doorName + ": problem changing door to sensor type. Check your IDE to make sure the brbeaird : " + sensorTypeName + 
 											" device handler is installed and published. \r\n\r\n"
 					} else throw e
                 }
@@ -803,13 +791,12 @@ def createChilDevices(door, sensor, doorName, prefPushButtons){
                     if (isDebug) log.debug "Creating door with lock type"
                     childDoor = addChildDevice("brbeaird", lockTypeName, DNI, getHubID(), ["name": doorName])
                     childDoor.updateMyQDeviceId(myQDeviceId)
-                    state.installMsg = state.installMsg + doorName + ": created lock device \r\n\r\n"
+                    installMsg = installMsg + doorName + ": created lock device \r\n\r\n"
                 }
-                // catch(com.hubitat.app.exception.UnknownDeviceTypeException e)
 				catch (Exception e) {
 					if ("${e}".startsWith("${ST?'physicalgraph':'com.hubitat'}.app.exception.UnknownDeviceTypeException")) { 
 						log.error "Error! ${e}"
-                    	state.installMsg = state.installMsg + doorName + ": problem creating door device (lock type). Check your IDE to make sure the brbeaird : " + sensorTypeName + 
+                    	installMsg = installMsg + doorName + ": problem creating door device (lock type). Check your IDE to make sure the brbeaird : " + sensorTypeName + 
 											" device handler is installed and published. \r\n\r\n"
 					} else throw e
                 }
@@ -818,16 +805,15 @@ def createChilDevices(door, sensor, doorName, prefPushButtons){
             else if (sensor){
                 try{
                     if (isDebug) log.debug "Creating door with sensor(s)"
-                    log.trace sensorTypeName + " ${DNI}, ${getHubID()}, ${doorName}"
+                    if (isDebug) log.trace sensorTypeName + " ${DNI}, ${getHubID()}, ${doorName}"
                     childDoor = addChildDevice("brbeaird", sensorTypeName, DNI, getHubID(), ["name": doorName])
                     childDoor.updateMyQDeviceId(myQDeviceId)
-                    state.installMsg = state.installMsg + doorName + ": created door device (sensor version) \r\n\r\n"
+                    installMsg = installMsg + doorName + ": created door device (sensor version) \r\n\r\n"
                 }
-                //catch(com.hubitat.app.exception.UnknownDeviceTypeException e)
 				catch (Exception e) {
 					if ("${e}".startsWith("${ST?'physicalgraph':'com.hubitat'}.app.exception.UnknownDeviceTypeException")) { 
 						log.error "Error! ${e}"
-                    	state.installMsg = state.installMsg + doorName + ": problem creating door device (sensor type). Check your IDE to make sure the brbeaird : " + sensorTypeName + 
+                    	installMsg = installMsg + doorName + ": problem creating door device (sensor type). Check your IDE to make sure the brbeaird : " + sensorTypeName + 
 											" device handler is installed and published. \r\n\r\n"
 					} else throw e
                 }
@@ -837,13 +823,12 @@ def createChilDevices(door, sensor, doorName, prefPushButtons){
                     if (isDebug) log.debug "Creating door with no sensor"
                     childDoor = addChildDevice("brbeaird", noSensorTypeName, DNI, getHubID(), ["name": doorName])
                     childDoor.updateMyQDeviceId(myQDeviceId)
-                    state.installMsg = state.installMsg + doorName + ": created door device (no-sensor version) \r\n\r\n"
+                    installMsg = installMsg + doorName + ": created door device (no-sensor version) \r\n\r\n"
                 }
-                //catch(com.hubitat.app.exception.UnknownDeviceTypeException e)
 				catch (Exception e) {
 					if ("${e}".startsWith("${ST?'physicalgraph':'com.hubitat'}.app.exception.UnknownDeviceTypeException")) { 
 						log.error "Error! ${e}"
-                    	state.installMsg = state.installMsg + doorName + ": problem creating door device (no-sensor type). Check your IDE to make sure the brbeaird : " + noSensorTypeName + 
+                    	installMsg = installMsg + doorName + ": problem creating door device (no-sensor type). Check your IDE to make sure the brbeaird : " + noSensorTypeName + 
 							" device handler is installed and published. \r\n\r\n"
 					} else throw e
                 }
@@ -858,22 +843,21 @@ def createChilDevices(door, sensor, doorName, prefPushButtons){
             if (!existingOpenButtonDev){
                 try{
                 	def openButton = addChildDevice("smartthings", "Momentary Button Tile", door + " Opener", getHubID(), [name: doorName + " Opener", label: doorName + " Opener"])
-                	state.installMsg = state.installMsg + doorName + ": created push button device. \r\n\r\n"
+                	installMsg = installMsg + doorName + ": created push button device. \r\n\r\n"
                 	subscribe(openButton, "momentary.pushed", doorButtonOpenHandler)
 					if (isDebug) log.debug "created and subscribed to button: ${openButton.displayName}"
                 }
-                //catch(com.hubitat.app.exception.UnknownDeviceTypeException e)
 				catch (Exception e) {
 					if ("${e}".startsWith("${ST?'physicalgraph':'com.hubitat'}.app.exception.UnknownDeviceTypeException")) { 
 						log.error "Error! ${e}"
-                    	state.installMsg = state.installMsg + doorName + ": problem creating push button device. Check your IDE to make sure the smartthings : Momentary Button Tile device handler " +
+                    	installMsg = installMsg + doorName + ": problem creating push button device. Check your IDE to make sure the smartthings : Momentary Button Tile device handler " +
 											"is installed and published. \r\n\r\n"
 					} else throw e
                 }
             }
             else{
             	subscribe(existingOpenButtonDev, "momentary.pushed", doorButtonOpenHandler)
-                state.installMsg = state.installMsg + doorName + ": push button device already exists. Subscription recreated. \r\n\r\n"
+                installMsg = installMsg + doorName + ": push button device already exists. Subscription recreated. \r\n\r\n"
 				if (isDebug) log.debug "subscribed to button: ${existingOpenButtonDev.displayName}"
             }
 
@@ -883,7 +867,6 @@ def createChilDevices(door, sensor, doorName, prefPushButtons){
                     subscribe(closeButton, "momentary.pushed", doorButtonCloseHandler)
 					if (isDebug) log.debug "created and subscribed to button: ${closeButton.displayName}"
                 }
-                //catch(com.hubitat.app.exception.UnknownDeviceTypeException e)
 				catch (Exception e) {
 					if ("${e}".startsWith("${ST?'physicalgraph':'com.hubitat'}.app.exception.UnknownDeviceTypeException")) { 
 						log.error "Error! ${e}"
@@ -906,12 +889,13 @@ def createChilDevices(door, sensor, doorName, prefPushButtons){
                 try{
                 	ST ? deleteChildDevice(it.deviceNetworkId, true) : deleteChildDevice(it.deviceNetworkId)
                 } catch (e){
-                    state.installMsg = state.installMsg + "Warning: unable to delete virtual on/off push button - you'll need to manually remove it. \r\n\r\n"
+                    installMsg = installMsg + "Warning: unable to delete virtual on/off push button - you'll need to manually remove it. \r\n\r\n"
                     log.error "Error trying to delete button " + it + " - " + e + "\nButton  is likely in use in a Routine, or SmartApp (make sure and check SmarTiles!)."
                 }
             }
         }
     }
+	if (installMsg) state.installMsg = installMsg + state.installMsg
 }
 
 
@@ -956,12 +940,6 @@ def updateDoorStatus(doorDNI, sensor, child){
 		String currentActivity
 		if (state.data[door].activity) {
 			currentActivity = settings[state.data[door].activity].latestValue('acceleration') ?: 'unknown'
-//			if (currentActivity == 'unknown') log.error "${doorName} - CURRENTACTIVITY IS UNKNOWN!!!"							   
-//			if ((currentActivity != 'unknown') && (doorActivity != currentActivity)) {
-//				if (isDebug) log.debug "${doorName} - Updating acceleration --> ${currentActivity}"
-//				doorToUpdate.updateDeviceAcceleration(currentActivity)
-//				doorActivity = currentActivity
-//			}
 		} else if (doorActivity != "unknown") {
 			//No Activity Sensor, so we will never know what the acceleration is
 			doorToUpdate.updateDeviceAcceleration('unknown')
@@ -971,9 +949,7 @@ def updateDoorStatus(doorDNI, sensor, child){
         //Get current Contact or 3D Emultated Tilt Sensor value (we will only have one or the other, not both)
         def currentSensorContact = getCurrentContact(door)
 		def sensorName = sensor.displayName
-		// if we're using contact as activity, or activity as threed contact, 
-		//boolean sameSame = (state.data[door].sensor && (sensor == state.data[door].sensor)) ? (sensor == state.data[door].activity) 
-		//																					: ((state.data[door].activity && (sensor == state.data[door].activity)) ? (sensor == state.data[door].threed) : false)
+
 		if (isDebug) log.debug "${doorName} - Using ${sensorName} --> ${currentSensorContact}"
         def currentDoorContact = doorToUpdate.latestValue("contact")
 		def currentDoorStatus = doorToUpdate.latestValue('door')
@@ -1013,9 +989,7 @@ def updateDoorStatus(doorDNI, sensor, child){
             //Write to child log if this was initiated from one of the doors
             if (child){child.log("Updating as '${currentSensorContact}' from sensor ${sensorName}")}
 
-            //Get latest activity timestamp for the sensor (data saved for up to a week)
-            //def eventsSinceYesterday = sensor.eventsSince(new Date() - 7)
-            //def latestEvent = eventsSinceYesterday[0]?.date
+            //Get latest Door activity timestamp for the sensor (data saved for up to a week)
 			def statesSinceLastWeek = doorToUpdate.statesSince("door", new Date() -7)
 			def latestEvent = statesSinceLastWeek[0]?.date
 
@@ -1024,9 +998,6 @@ def updateDoorStatus(doorDNI, sensor, child){
             	doorToUpdate.updateDeviceLastActivity(latestEvent)
 				state.data[door].lastAction = latestEvent
             }
-            //else{	//If the door has been inactive for more than a week, timestamp data will be null. Keep current value in that case.
-            //	timeStampLogText = "Door: " + doorName + ": Null door action timestamp detected "  + /*" -  from sensor " + sensor + */ ". Keeping current value."
-            //}
         }
     } catch (e) {
         log.error "Error updating door: ${getChildDevice(doorDNI).displayName}: ${e}"
@@ -1054,7 +1025,6 @@ def sensorHandler(evt) {
 	if (isDebug) log.debug "Contact Sensor detected from device ${evt.device.displayName}, name: ${evt.name}, value: ${evt.value}, deviceID: ${evt.deviceId}"
     state.validatedDoors.each{ door ->
 		if (settings[state.data[door].sensor]?.id.toString() == evt.deviceId.toString()) {
-			boolean sameSame = (state.data[door].sensor && (state.data[door].sensor == state.data[door].activity))
 			def theDoor = getChildDevice(state.data[door].child)
 			theDoor.updateDeviceContact(evt.value)	// change the contact state - other events or timers will do the full update later
 			if (evt.value == 'open') {
@@ -1097,7 +1067,6 @@ String check3DContact(door, xyz = null) {
 				return "unknown"
 			}
 		}
-        // log.debug "xyz: ${xyz}, " + xyz."${axis}".toString() + " (${axis})"
 		// 3D values aren't "closed" until the door stops moving (reports inactive)
 		return ((Math.abs(xyz."${axis}") > 900) && (threed?.latestValue('acceleration') == 'inactive')) ? 'closed' : 'open'
 	} else {
@@ -1123,16 +1092,9 @@ def activityHandler(evt) {
 	state.validatedDoors.each{ door ->
 		if (settings[state.data[door].activity]?.id.toString() == evt.deviceId.toString()) {
 			def theDoor = getChildDevice(state.data[door].child)
-			if (theDoor.latestValue('acceleration') != evt.value) theDoor.updateDeviceAcceleration(evt.value)
 			
-			// update the door's contact status if we don't have an actual contact sensor, otherwise let the actual contact sensor do the update on its own
-			// log.trace "activity: ${evt.value}, door.contact: ${theDoor.latestValue('contact')}, currentContact: ${getCurrentContact(door)}"
-			//if (!state.data[door].sensor && evt.device.hasAttribute('threeAxis')) updateDoorStatus(state.data[door].child, evt.device, null)
-			//log.trace "activity: ${evt.value}, door.contact: ${theDoor.latestValue('contact')}, check3D: ${check3DContact(door)}"
+			// If the door's Contact Sensor and Activity Sensor are the same, or the Activity and ThreeD sensors are the same then we can safely update Contact based on Activity
 			
-			// If the door's Activity Sensor is the same as its Contact Sensor, then we can safely update Contact based on Activity
-			boolean sameSame = state.data[door].sensor ? (state.data[door].sensor == state.data[door].activity) 
-            										   : (state.data[door].activity ? (state.data[door].activity == state.data[door].threed) : false)
 			def doorName = theDoor.displayName
 			def doorContact = theDoor.latestValue('contact')
 			def currentDoor = theDoor.latestValue('door')
@@ -1148,17 +1110,15 @@ def activityHandler(evt) {
 						state.data[door].status = "closing"
 					} else if (((currentDoor == 'closed') || (currentDoor == 'opening')) && (doorContact == 'closed')) {
 						if (currentDoor != 'opening') theDoor.updateDeviceStatus("opening")
-						// if (sameSame && (doorContact != 'open') || !state.data[door].sensor) theDoor.updateDeviceContact("open")
 						theDoor.updateDeviceContact("open")
 						logInfo "Updating ${doorName} from ${evt.device.displayName} --> opening"
-						//String cval = sameSame ? 'open' : 'closed'
 						if (sensor) theDoor.updateDeviceSensor("${sensor.displayName} is open (opening)")
 						state.data[door].status = "opening"
-					} //else if ((currentDoor == 'opening') && (doorContact == 'open')) {
+					} else if ((currentDoor == 'opening') && (doorContact == 'open')) {
 						//Door is already opening, just update the "doorSensor" attribute (it may have said "closed (opening)", from above)
-						//if (sensor) theDoor.updateDeviceSensor("${sensor.displayName} is open (opening)")
-						//state.data[door].status = "opening"
-					//}
+						if (sensor) theDoor.updateDeviceSensor("${sensor.displayName} is open (opening)")
+						state.data[door].status = "opening"
+					}
 				} else {
 					// We don't have a contact sensor of any type
 					if (currentDoor == 'open') {
@@ -1176,19 +1136,19 @@ def activityHandler(evt) {
 				if (doorContact) {
 					if ((currentDoor == 'opening') && (currentContact == 'open')) {
 						theDoor.updateDeviceStatus('open')
-						if (sameSame || !state.data[door].sensor) theDoor.updateDeviceContact('open')
+						if (state.sameSame || !state.data[door].sensor) theDoor.updateDeviceContact('open')
 						if (sensor) theDoor.updateDeviceSensor("${sensor.displayName} is open")
 						state.data[door].status = "open"
 					} else if (((currentDoor == 'closing') || (currentDoor == 'waiting')) && (currentContact == 'closed')) {
 						theDoor.updateDeviceStatus('closed')
-						if (sameSame || !state.data[door].sensor) theDoor.updateDeviceContact('closed')
+						if (state.sameSame || !state.data[door].sensor) theDoor.updateDeviceContact('closed')
 						if (sensor) theDoor.updateDeviceSensor("${sensor.displayName} is closed")
 						state.data[door].status = "closed"
 					}
 				} else {
 					if (currentDoor == 'closing') {
 						theDoor.updateDeviceStatus('closed')
-						if (sameSame || !state.data[door].sensor) theDoor.updateDeviceContact('closed')
+						if (state.sameSame || !state.data[door].sensor) theDoor.updateDeviceContact('closed')
 						if (sensor) theDoor.updateDeviceSensor("${sensor.displayName} is closed")
 						state.data[door].status = "closed"
 					} else if (currentDoor == 'opening') {
@@ -1387,8 +1347,32 @@ private getMyQDevices() {
 	}
 }
 
+// Get the Hub identifier for addChildDevice.
 def getHubID(){
-    return getIsST() ? '' : 1234
+	if (getIsST()) {
+		def hubs = location.hubs.findAll{ it.type == physicalgraph.device.HubType.PHYSICAL }
+
+		//Try and find a valid hub on the account
+		def chosenHub
+		hubs.each {
+			if (it != null){
+				chosenHub = it
+			}
+		}
+
+		if (chosenHub != null){
+			log.debug "Chosen hub for child devices: ${chosenHub} (${chosenHub.id})"
+			return chosenHub.id
+		}
+		else{
+			log.debug "No physical hubs found. Sending NULL"
+			return null
+		}
+	} else {
+		// On Hubitat
+		log.debug "Hubitat hub is: ${location.id}"
+		return location.id
+	}
 }
 
 /* API Methods */
@@ -1553,7 +1537,6 @@ def sendCommand(myQDeviceId, command) {
 	}
 	state.lastCommandSent = now()
   	apiPut("/api/v5.1/Accounts/${state.session.accountId}/Devices/${myQDeviceId}/actions", "{\"action_type\":\"${command}\"}", "${state.data[myQDeviceId].name}(${command})")
-    //log.debug "MyQ Command for ${theDoor.displayName} --> ${command.toUpperCase()}"
     return true
 }
 
