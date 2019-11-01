@@ -36,17 +36,17 @@ metadata {
 		
 		attribute "lastActivity", "string"
         attribute "doorSensor", "string"
-        attribute "doorMoving", "string"
+//      attribute "doorMoving", "string"
         attribute "OpenButton", "string"
         attribute "CloseButton", "string"
         attribute "myQDeviceId", "string"
         
 		command "updateDeviceStatus", ["string"]
 		command "updateDeviceLastActivity", ["number"]
-        command "updateDeviceMoving", ["string"]
+//		command "updateDeviceMoving", ["string"]
 		command "updateDeviceSensor", ["string"]
-        command "updateMyQDeviceId", ["string"]
-		command "updateDeviceAcceleration", ["string"]
+//		command "updateMyQDeviceId", ["string"]
+//		command "updateDeviceAcceleration", ["string"]
 	}
 
 	simulator {	}
@@ -90,9 +90,9 @@ metadata {
         valueTile("doorSensor", "device.doorSensor", width: 3, height: 2, inactiveLabel: false, decoration: "flat") {
 			state "default", label:'${currentValue}', backgroundColor:"#ffffff"
 		}
-		valueTile("doorMoving", "device.doorMoving", width: 6, height: 2, inactiveLavel: false, decoration: "flat") {
-			state "default", label: '${currentValue}', backgroundColor:"#ffffff"
-		}        
+//		valueTile("doorMoving", "device.doorMoving", width: 6, height: 2, inactiveLavel: false, decoration: "flat") {
+//			state "default", label: '${currentValue}', backgroundColor:"#ffffff"
+//		}        
         main "door"
 		details(["door", "openBtn", "closeBtn", "doorSensor", "refresh"])
 	}
@@ -132,9 +132,9 @@ def open()  {
 	if (currentState && allowedStates.contains(currentState)) {
 		log.debug "Garage door sending 'open' command."
 		parent.notify("${device.displayName} sending 'open' command.")
-		// updateDeviceStatus("opening")
+		// updateDeviceStatus("opening")		// the parent handles this now...
 		parent.sendCommand(getMyQDeviceId(), "open")
-		runIn(20, refresh, [overwrite: true])	//Force a sync with Contact/3D Sensor after 20 seconds
+		runIn(20, refresh, [overwrite: true])	//Force a sync withSensors after 20 seconds
 	} else {
 		log.debug "Ignoring open() request because door is currently ${currentState} (${allowedStates.toString()[1..-2]})"
 	}
@@ -191,7 +191,6 @@ def updateDeviceStatus(status) {
 		case "open":
     		log.debug "Door is now open"
 			sendEvent(name: "door", value: "open", display: true /*, isStateChange: true*/, descriptionText: device.displayName + " is open") 
-			//sendEvent(name: "contact", value: "open", display: false, displayed: false /*, isStateChange: true*/)	// make sure we update the hidden states as well
         	sendEvent(name: "switch", value: "on", display: false, displayed: false /*, isStateChange: true*/)		// on == open
             sendEvent(name: "OpenButton", value: "normal", displayed: false, isStateChange: true)
             break
@@ -199,10 +198,7 @@ def updateDeviceStatus(status) {
         case "closed":
 			log.debug "Door is now closed"
         	sendEvent(name: "door", value: "closed", display: true /*, isStateChange: true*/, descriptionText: device.displayName + " is closed")
-			//sendEvent(name: "contact", value: "closed", display: false, displayed: false /*, isStateChange: true*/)	// update hidden states
         	sendEvent(name: "switch", value: "off", display: false, displayed: false /*, isStateChange: true*/)		// off == closed
-			//def acceleration = device.currentValue('acceleration')
-			//if (acceleration && (acceleration != "unknown")) sendEvent(name: "acceleration", value: 'inactive', display: false, displayed: false)
     		sendEvent(name: "CloseButton", value: "normal", displayed: false, isStateChange: true)
             break
             
@@ -212,10 +208,7 @@ def updateDeviceStatus(status) {
         	}
         	else{
 				log.debug "Door is opening."
-        		sendEvent(name: "door", value: "opening", descriptionText: "Sent opening command.", display: false, displayed: true /*, isStateChange: true*/)
-				//sendEvent(name: "contact", value: "open", display: false, displayed: false /*, isStateChange: true*/)	// make sure we update the hidden states as well
-				//def acceleration = device.currentValue('acceleration')
-				//if (acceleration && (acceleration != "unknown")) sendEvent(name: "acceleration", value: 'active', display: false, displayed: false)
+        		sendEvent(name: "door", value: "opening", descriptionText: device.displayName + " is opening", display: false, displayed: true /*, isStateChange: true*/)
         	}
             break
 
@@ -224,23 +217,21 @@ def updateDeviceStatus(status) {
         		log.debug "Door is already closed. Leaving status alone."
         	}
 			else{
-        		sendEvent(name: "door", value: "closing", display: false, displayed: false /*, isStateChange: true*/)
-				//def acceleration = device.currentValue('acceleration')
-				//if (acceleration && (acceleration != "unknown")) sendEvent(name: "acceleration", value: 'active', display: false, displayed: false)
+        		sendEvent(name: "door", value: "closing", display: false, displayed: false, descriptionText: device.displayName + " is closing" /*, isStateChange: true*/)
         	}
             break
 	
     	case "stopped":
     		if (currentState != "closed") {
     			log.debug "Door is stopped"
-    			sendEvent(name: "door", value: "stopped", display: false, displayed: false /*, isStateChange: true*/)
+    			sendEvent(name: "door", value: "stopped", display: false, displayed: false, descriptionText: device.displayName + " is stopped" /*, isStateChange: true*/)
         	}
             break
             
         case "waiting":
         	if (currentState == "open") {
             	log.debug "Door is waiting before closing"
-                sendEvent(name: "door", value: "waiting", display: false, displayed: false /*, isStateChange: true*/)
+                sendEvent(name: "door", value: "waiting", display: false, displayed: false, descriptionText: device.displayName + " is waiting" /*, isStateChange: true*/)
             }
             break
         }
@@ -259,9 +250,9 @@ def updateDeviceAcceleration(activity) {
 	sendEvent(name: "acceleration", value: activity, display: false, displayed: false)
 }
 
-def updateDeviceMoving(moving) {	
-	sendEvent(name: "doorMoving", value: moving, display: false , displayed: false)
-}
+//def updateDeviceMoving(moving) {	
+//	sendEvent(name: "doorMoving", value: moving, display: false , displayed: false)
+//}
 
 def updateDeviceContact(contact) {
 	sendEvent(name: "contact", value: contact, display: false, displayed: false)
@@ -277,5 +268,5 @@ def log(msg){
 }
 
 def showVersion(){
-	return "3.1.0"
+	return "3.1.1bab"
 }
