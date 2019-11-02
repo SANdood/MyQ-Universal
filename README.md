@@ -1,5 +1,7 @@
 # MyQ-Universal
-Port of @brbeaird's MyQ Lite 3.1.0 to universal HE/ST, plus the addition of Acceleration Sensor support
+Port of @brbeaird's MyQ Lite 3.1.0 to run on both Hubitat & SmartThings, plus the addition of Acceleration/Three Axis Sensor support
+
+***NOTE:*** *The Lock Door and No Sensor versions have been ported, but not tested. Please report issues to me via GitHub*
 
 The optimal use of this driver is with some form of a Contact / Tilt Sensor plus an Activity (acceleration) Sensor, but there are multiple options with this new implementation:
 
