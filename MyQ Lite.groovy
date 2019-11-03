@@ -18,9 +18,10 @@
  *
  *	3.1.1bab	Initial release of BAB's addition of Acceleration & 3D Sensor support
  *	3.1.2bab	Don't prematurely mark the door open if we get acceleration without contact/tilt/3D confirmation the door is open
+ *	3.1.3bab	Fix the fix
  */
 
-String appVersion() { return "3.1.2bab" }
+String appVersion() { return "3.1.3bab" }
 String appModified() { return "2019-11-03"}
 String appAuthor() { return "Brian Beaird" }
 String gitBranch() { return "brbeaird" }
@@ -591,9 +592,6 @@ def initialize() {
         createChilDevices(door, theSensor, state.data[door].name, settings["prefDoor${doorCounter}PushButtons"])
         doorCounter++
     }
-	boolean sameSame = state.data[door].sensor ? (state.data[door].sensor == state.data[door].activity) 
-            										   : (state.data[door].activity ? (state.data[door].activity == state.data[door].threed) : false)
-	state.sameSame = sameSame	// so we don't have to calculate this over and over again
     state.lastSuccessfulStep = "Door device creation"
 
 
@@ -1141,11 +1139,13 @@ def activityHandler(evt) {
 					}
 				}
 			} else { // inactive
+				boolean sameSame = state.data[door].sensor ? (state.data[door].sensor == state.data[door].activity) 
+            			  								   : (state.data[door].activity ? (state.data[door].activity == state.data[door].threed) : false)
 				if (doorContact) {
 					if (currentDoor == 'opening') {
 						if (currentContact == 'open') {
 							theDoor.updateDeviceStatus('open')
-							if (state.sameSame || !state.data[door].sensor) theDoor.updateDeviceContact('open')
+							//if (sameSame || !state.data[door].sensor) theDoor.updateDeviceContact('open')
 							if (sensor) theDoor.updateDeviceSensor("${sensor.displayName} is open")
 							state.data[door].status = "open"
 						} else if (currentContact == 'closed') {
@@ -1155,7 +1155,7 @@ def activityHandler(evt) {
 						}
 					} else if (((currentDoor == 'closing') || (currentDoor == 'waiting')) && (currentContact == 'closed')) {
 						theDoor.updateDeviceStatus('closed')
-						if (state.sameSame || !state.data[door].sensor) theDoor.updateDeviceContact('closed')
+						if (sameSame || !state.data[door].sensor) theDoor.updateDeviceContact('closed')
 						if (sensor) theDoor.updateDeviceSensor("${sensor.displayName} is closed")
 						state.data[door].status = "closed"
 					} else if (currentContact == 'closed') {
@@ -1166,7 +1166,7 @@ def activityHandler(evt) {
 				} else {
 					if (currentDoor == 'closing') {
 						theDoor.updateDeviceStatus('closed')
-						if (state.sameSame || !state.data[door].sensor) theDoor.updateDeviceContact('closed')
+						if (sameSame || !state.data[door].sensor) theDoor.updateDeviceContact('closed')
 						if (sensor) theDoor.updateDeviceSensor("${sensor.displayName} is closed")
 						state.data[door].status = "closed"
 					} else if (currentDoor == 'opening') {
