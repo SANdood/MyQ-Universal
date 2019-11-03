@@ -1,6 +1,11 @@
 # MyQ-Universal
 Port of @brbeaird's MyQ Lite 3.1.0 to run on both Hubitat & SmartThings, plus the addition of Acceleration/Three Axis Sensor support
 
+### Change Log
+#### 3.1.2bab 11/03/2019 
+  * Don't mark door `open` or `opening` when Accelerations becomes `active` and the door is closed - wait for the Contact Sensor (or 3D Sensor) become `open` before marking the door `opening`/`open`. This should avoid cases where the wind (or something) shakes the door.
+  * Reset all door attributes to `closed` if door goes `inactive` without Contact sensor becoming `open`
+  
 ***NOTE:*** *The Lock Door and No Sensor versions have been ported, but not tested. Please report issues to me via GitHub*
 
 The optimal use of this driver is with some form of a Contact / Tilt Sensor plus an Activity (acceleration) Sensor, but there are multiple options with this new implementation:
