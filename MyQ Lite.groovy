@@ -1031,8 +1031,14 @@ def sensorHandler(evt) {
 			theDoor.updateDeviceContact(evt.value)	// change the contact state - other events or timers will do the full update later
 			if (evt.value == 'open') {
 				// if using the same sensor for Contact and Activity, we can overload the Activity status
-				theDoor.updateDeviceAcceleration('active')
-				if (theDoor.latestValue('doorSensor').endsWith('closed (opening)')) theDoor.updateDeviceSensor("${evt.device.displayName} is open (opening)")
+				//if (state.sameSame) theDoor.updateDeviceAcceleration('active')
+				if ((theDoor.latestValue('door') == 'closed') && (theDoor.latestValue('acceleration') == 'active')) {
+					theDoor.updateDeviceStatus('opening')
+					theDoor.updateDeviceSensor("${evt.device.displayName} is open (opening)")
+					logInfo "Updating ${theDoor.displayName} from ${evt.device.displayName} --> opening"
+				} else {
+					if (theDoor.latestValue('doorSensor').endsWith('closed (opening)')) theDoor.updateDeviceSensor("${evt.device.displayName} is open (opening)")
+				}
 			} else if (evt.value == 'closed') {
 				theDoor.updateDeviceAcceleration('inactive')
             	updateDoorStatus(state.data[door].child, settings[state.data[door].sensor], null)
@@ -1114,7 +1120,7 @@ def activityHandler(evt) {
 						// DON'T update door status until the other sensor (contact/3D) says the door is open
 						//theDoor.updateDeviceContact("open")
 						logInfo "Updating ${doorName} from ${evt.device.displayName} --> opening"
-						if (sensor) theDoor.updateDeviceSensor("${sensor.displayName} is open (opening)")
+						if (sensor) theDoor.updateDeviceSensor("${sensor.displayName} is closed (opening)")
 						state.data[door].status = "opening"
 					} else if ((currentDoor == 'opening') && (doorContact == 'open')) {
 						//Door is already opening, just update the "doorSensor" attribute (it may have said "closed (opening)", from above)
@@ -1136,18 +1142,26 @@ def activityHandler(evt) {
 				}
 			} else { // inactive
 				if (doorContact) {
-					if ((currentDoor == 'opening') && (currentContact == 'open')) {
-						theDoor.updateDeviceStatus('open')
-						if (state.sameSame || !state.data[door].sensor) theDoor.updateDeviceContact('open')
-						if (sensor) theDoor.updateDeviceSensor("${sensor.displayName} is open")
-						state.data[door].status = "open"
+					if (currentDoor == 'opening') {
+						if (currentContact == 'open') {
+							theDoor.updateDeviceStatus('open')
+							if (state.sameSame || !state.data[door].sensor) theDoor.updateDeviceContact('open')
+							if (sensor) theDoor.updateDeviceSensor("${sensor.displayName} is open")
+							state.data[door].status = "open"
+						} else if (currentContact == 'closed') {
+							theDoor.updateDeviceStatus('closed')	// Must have seen Acceleration but contact never opened
+							if (sensor) theDoor.updateDeviceSensor("${sensor.displayName} is closed")
+							logInfo "${doorName} is 'opening', ${evt.device.displayName} is inactive, ${sensor.displayName} is closed --> 'closed')"
+						}
 					} else if (((currentDoor == 'closing') || (currentDoor == 'waiting')) && (currentContact == 'closed')) {
 						theDoor.updateDeviceStatus('closed')
 						if (state.sameSame || !state.data[door].sensor) theDoor.updateDeviceContact('closed')
 						if (sensor) theDoor.updateDeviceSensor("${sensor.displayName} is closed")
 						state.data[door].status = "closed"
 					} else if (currentContact == 'closed') {
-						
+							theDoor.updateDeviceStatus('closed')	// Must have seen Acceleration but contact never opened
+							if (sensor) theDoor.updateDeviceSensor("${sensor.displayName} is closed")
+						logInfo "${doorName} is '${currentDoor}', ${evt.device.displayName} is inactive, ${sensor.displayName} is closed --> 'closed')"
 					}
 				} else {
 					if (currentDoor == 'closing') {
