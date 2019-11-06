@@ -19,9 +19,10 @@
  *	3.1.1bab	Initial release of BAB's addition of Acceleration & 3D Sensor support
  *	3.1.2bab	Don't prematurely mark the door open if we get acceleration without contact/tilt/3D confirmation the door is open
  *	3.1.3bab	Fix the fix
+ *	3.1.4bab	On activity, don't change "door" attribute until "contact" changes
  */
 
-String appVersion() { return "3.1.3bab" }
+String appVersion() { return "3.1.4bab" }
 String appModified() { return "2019-11-03"}
 String appAuthor() { return "Brian Beaird" }
 String gitBranch() { return "brbeaird" }
@@ -1114,11 +1115,11 @@ def activityHandler(evt) {
 						if (sensor) theDoor.updateDeviceSensor("${sensor.displayName} is open (closing)")
 						state.data[door].status = "closing"
 					} else if (((currentDoor == 'closed') || (currentDoor == 'opening')) && (doorContact == 'closed')) {
-						if (currentDoor != 'opening') theDoor.updateDeviceStatus("opening")
+						if ((currentContact == 'open') && (currentDoor != 'opening')) theDoor.updateDeviceStatus("opening")
 						// DON'T update door status until the other sensor (contact/3D) says the door is open
 						//theDoor.updateDeviceContact("open")
 						logInfo "Updating ${doorName} from ${evt.device.displayName} --> opening"
-						if (sensor) theDoor.updateDeviceSensor("${sensor.displayName} is closed (opening)")
+						if (sensor) theDoor.updateDeviceSensor("${sensor.displayName} is ${currentContact} (opening)")
 						state.data[door].status = "opening"
 					} else if ((currentDoor == 'opening') && (doorContact == 'open')) {
 						//Door is already opening, just update the "doorSensor" attribute (it may have said "closed (opening)", from above)
