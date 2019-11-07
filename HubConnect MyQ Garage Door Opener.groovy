@@ -40,6 +40,8 @@ metadata {
         attribute "OpenButton", "string"
         attribute "CloseButton", "string"
         attribute "myQDeviceId", "string"
+		
+		attribute "version", "string"
         
 //		command "updateDeviceStatus", ["string"]
 //		command "updateDeviceLastActivity", ["number"]
