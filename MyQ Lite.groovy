@@ -3,7 +3,7 @@
  * ------ SMART APP ------
  * -----------------------
  *
- *  MyQ Lite
+ *  MyQ Lite (Universal SmartThings SmartApp & Hubitat Application)
  *
  *  Copyright 2019 Jason Mok/Brian Beaird/Barry Burke/RBoy Apps
  *
@@ -20,9 +20,10 @@
  *	3.1.2bab	Don't prematurely mark the door open if we get acceleration without contact/tilt/3D confirmation the door is open
  *	3.1.3bab	Fix the fix
  *	3.1.4bab	On activity, don't change "door" attribute until "contact" changes
+ *	3.1.5bab	On HE, force latestValue() to bypass HE's caching to get the true value
  */
 
-String appVersion() { return "3.1.4bab" }
+String appVersion() { return "3.1.5bab" }
 String appModified() { return "2019-11-03"}
 String appAuthor() { return "Brian Beaird" }
 String gitBranch() { return "brbeaird" }
@@ -131,6 +132,8 @@ def logInfo(msg) {
 }
 
 def refreshChildren(){
+	boolean ST = atomicState.isST
+	
 	state.currentVersion = [:]
     state.currentVersion['SmartApp'] = appVersion()
     def devices = []
@@ -138,7 +141,7 @@ def refreshChildren(){
         def devName = child.name
         if (child.typeName == "MyQ Garage Door Opener"){
 			def myQId = child.getMyQDeviceId() ? "ID: ${child.getMyQDeviceId()}" : 'Missing MyQ ID'
-        	devName = devName + " (${child.currentContact})  ${myQId}"
+        	devName = devName + " ${ST ? child.latestValue('contact') : child.latestValue('contact', true)})  ${myQId}"
             state.currentVersion['DoorDevice'] = child.showVersion()
         }
         else if (child.typeName == "MyQ Garage Door Opener-NoSensor"){
@@ -148,7 +151,7 @@ def refreshChildren(){
 		}
         else if (child.typeName == "MyQ Light Controller"){
 			def myQId = child.getMyQDeviceId() ? "ID: ${child.getMyQDeviceId()}" : 'Missing MyQ ID'
-        	devName = devName + " (${child.currentSwitch})  ${myQId}"
+        	devName = devName + " (${ST ? child.latestValue('switch') : child.latestValue('switch', true)})  ${myQId}"
             state.currentVersion['LightDevice'] = child.showVersion()
         }
         else{
@@ -539,7 +542,7 @@ def initialize() {
 			String contactName = settings["door${doorSensorCounter}Sensor"].displayName
 			doorSensorText += "${contactName} (contact"
 			aSensor = true
-			def currentContact = settings["door${doorSensorCounter}Sensor"].currentValue('contact')
+			def currentContact = ST ? settings["door${doorSensorCounter}Sensor"].latestValue('contact') : settings["door${doorSensorCounter}Sensor"].latestValue('contact', true)
 			if (state.data[door].status != currentContact) {
 				String warning = "DOOR STATUS MISMATCH: ${contactName}: ${currentContact}, MyQ: ${state.data[door].status}"
 				log.warn warning
@@ -918,7 +921,8 @@ def syncDoorsWithSensors(child){
 }
 
 def updateDoorStatus(doorDNI, sensor, child){
-	def ST = atomicState.isST
+	boolean ST = atomicState.isST
+	
     try{
         if (isDebug) log.debug "Updating door status: ${doorDNI} ${sensor} ${child}"
 
@@ -937,10 +941,11 @@ def updateDoorStatus(doorDNI, sensor, child){
 		String door = doorDNI.split("\\|").last()
 		
 		// Get the current Acceleration sensor value (if we have one)
-		String doorActivity = doorToUpdate.latestValue('acceleration')
+		String doorActivity = ST ? doorToUpdate.latestValue('acceleration') : doorToUpdate.latestValue('acceleration', true)
 		String currentActivity
 		if (state.data[door].activity) {
-			currentActivity = settings[state.data[door].activity].latestValue('acceleration') ?: 'unknown'
+			currentActivity = (ST ? settings[state.data[door].activity].latestValue('acceleration') : settings[state.data[door].activity].latestValue('acceleration', true)) ?: 'unknown'
+			doorToUpdate.updateDeviceAcceleration(currentActivity)
 		} else if (doorActivity != "unknown") {
 			//No Activity Sensor, so we will never know what the acceleration is
 			doorToUpdate.updateDeviceAcceleration('unknown')
@@ -952,8 +957,8 @@ def updateDoorStatus(doorDNI, sensor, child){
 		def sensorName = sensor.displayName
 
 		if (isDebug) log.debug "${doorName} - Using ${sensorName} --> ${currentSensorContact}"
-        def currentDoorContact = doorToUpdate.latestValue("contact")
-		def currentDoorStatus = doorToUpdate.latestValue('door')
+        def currentDoorContact = ST ? doorToUpdate.latestValue("contact") : doorToUpdate.latestValue("contact", true)
+		def currentDoorStatus = ST ? doorToUpdate.latestValue('door') : doorToUpdate.latestValue('door', true)
 
 		if (isDebug) log.debug "${doorName} - door.contact: ${currentDoorContact}, sensor.contact: ${currentSensorContact}, door.door: ${currentDoorStatus}, door.acceleration: ${doorActivity}"
         //If sensor and door are out of sync, update the door
@@ -1023,6 +1028,8 @@ def refreshAll(evt){
 }
 
 def sensorHandler(evt) {
+	boolean ST = atomicState.isST
+	
 	if (isDebug) log.debug "Contact Sensor detected from device ${evt.device.displayName}, name: ${evt.name}, value: ${evt.value}, deviceID: ${evt.deviceId}"
     state.validatedDoors.each{ door ->
 		if (settings[state.data[door].sensor]?.id.toString() == evt.deviceId.toString()) {
@@ -1031,12 +1038,15 @@ def sensorHandler(evt) {
 			if (evt.value == 'open') {
 				// if using the same sensor for Contact and Activity, we can overload the Activity status
 				//if (state.sameSame) theDoor.updateDeviceAcceleration('active')
-				if ((theDoor.latestValue('door') == 'closed') && (theDoor.latestValue('acceleration') == 'active')) {
+				String doorDoor = ST ? theDoor.latestValue('door') : theDoor.latestValue('door', true)
+				String doorAcceleration = ST ? theDoor.latestValue('acceleration') : theDoor.latestValue('acceleration', true)
+				if ((doorDoor == 'closed') && (doorAcceleration == 'active')) {
 					theDoor.updateDeviceStatus('opening')
 					theDoor.updateDeviceSensor("${evt.device.displayName} is open (opening)")
 					logInfo "Updating ${theDoor.displayName} from ${evt.device.displayName} --> opening"
 				} else {
-					if (theDoor.latestValue('doorSensor').endsWith('closed (opening)')) theDoor.updateDeviceSensor("${evt.device.displayName} is open (opening)")
+					String doorSensor = ST ? theDoor.latestValue('doorSensor') : theDoor.latestValue('doorSensor', true)
+					if (doorSensor.endsWith('closed (opening)')) theDoor.updateDeviceSensor("${evt.device.displayName} is open (opening)")
 				}
 			} else if (evt.value == 'closed') {
 				theDoor.updateDeviceAcceleration('inactive')
@@ -1056,6 +1066,8 @@ def threeDHandler(evt) {
 }
 
 String check3DContact(door, xyz = null) {
+	boolean ST = atomicState.isST
+	
 	String axis = state.data[door].axis
 	def threed 
 	if (axis && (axis != "none")) {
@@ -1068,25 +1080,28 @@ String check3DContact(door, xyz = null) {
 		} else {
 			threed = settings[state.data[door].threed]
 			try {
-				xyz = threed?.latestValue('threeAxis')
+				xyz = ST ? threed?.latestValue('threeAxis') : threed?.latestValue('threeAxis', true)
 			} catch (e) {
 				log.warn "Could not read current xyzValues of ${motion.displayName}"
 				return "unknown"
 			}
 		}
 		// 3D values aren't "closed" until the door stops moving (reports inactive)
-		return ((Math.abs(xyz."${axis}") > 900) && (threed?.latestValue('acceleration') == 'inactive')) ? 'closed' : 'open'
+		String acceleration = ST ? threed?.latestValue('acceleration') : threed?.latestValue('acceleration', true)
+		return ((Math.abs(xyz."${axis}") > 900) && (acceleration == 'inactive')) ? 'closed' : 'open'
 	} else {
 		return "unknown"		// we probably haven't calculated our axis yet...
 	}
 }
 
 String getCurrentContact(door) {
+	boolean ST = atomicState.isST
+	
 	// Return the current contact value, from either the Contact Sensor or the 3D Sensor
 	String contact = "unknown"
 	
 	if (state.data[door]?.sensor) {
-		contact = settings[state.data[door]?.sensor].latestValue('contact')
+		contact = ST ? settings[state.data[door]?.sensor].latestValue('contact') : settings[state.data[door]?.sensor].latestValue('contact', true)
 	} else if (state.data[door]?.threed) {
 		contact = check3DContact(door)
 	}
@@ -1095,15 +1110,18 @@ String getCurrentContact(door) {
 }
 	
 def activityHandler(evt) {
+	boolean ST = atomicState.isST
+	
 	if (isDebug) log.debug "Activity change from device ${evt.device.displayName}, name: ${evt.name}, value: ${evt.value}, deviceID: ${evt.deviceId}"
 	state.validatedDoors.each{ door ->
 		if (settings[state.data[door].activity]?.id.toString() == evt.deviceId.toString()) {
 			def theDoor = getChildDevice(state.data[door].child)
-			if (theDoor.latestValue('acceleration') != evt.value) theDoor.updateDeviceAcceleration(evt.value)
+			String acceleration = ST ? theDoor.latestValue('acceleration') : theDoor.latestValue('acceleration', true)
+			if (acceleration != evt.value) theDoor.updateDeviceAcceleration(evt.value)
 			
 			def doorName = theDoor.displayName
-			def doorContact = theDoor.latestValue('contact')
-			def currentDoor = theDoor.latestValue('door')
+			def doorContact = ST ? theDoor.latestValue('contact') : theDoor.latestValue('contact', true)
+			def currentDoor = ST ? theDoor.latestValue('door') : theDoor.latestValue('door', true)
 			def sensor = (settings[state.data[door].sensor] ?: (settings[state.data[door].threed] ?: null))
 			def currentContact = getCurrentContact(door)
 			if (isDebug) log.debug "activityHandler() - evt.value: ${evt.value}, doorContact: ${doorContact}, currentDoor: ${currentDoor}, sensor: ${sensor}"
@@ -1178,7 +1196,8 @@ def activityHandler(evt) {
 					}
 				}
 			}
-            if (isDebug) log.debug "activityHandler() - evt.value: ${evt.value}, doorContact: ${theDoor.latestValue('contact')}, currentDoor: ${theDoor.latestValue('door')}, sensor: ${sensor}"
+            if (isDebug) log.debug "activityHandler() - evt.value: ${evt.value}, doorContact: ${ST ? theDoor.latestValue('contact') : theDoor.latestValue('contact', true)}, " +
+				"currentDoor: ${ST ? theDoor.latestValue('door') : theDoor.latestValue('door', true)}, sensor: ${sensor}"
 		}
 	}	
 }
@@ -1532,6 +1551,8 @@ private apiPostLogin(apiPath, apiBody = [], callback = {}) {
 
 // Send command to start or stop
 def sendCommand(myQDeviceId, command) {
+	boolean ST = atomicState.isST
+	
 	if (!state.data[myQDeviceId].verified) find3DAxis(myQDeviceId, command)
 	def theDoor = getChildDevice(state.data[myQDeviceId].child)
 	if (command == "close") {
@@ -1548,7 +1569,8 @@ def sendCommand(myQDeviceId, command) {
 		}
 	} else if (command == "open") {
 		theDoor.updateDeviceStatus("opening")
-		if ((theDoor.latestValue('contact') == 'closed')) { // && (theDoor.latestValue('door') == 'opening')) {
+		String doorContact = ST ? theDoor.latestValue('contact') : theDoor.latestValue('contact', true)
+		if ((doorContact == 'closed')) { // && (theDoor.latestValue('door') == 'opening')) {
 			// Slightly odd, but we are closed (opening) until the contact sensor says we are open
 			String sensorName = state.data[myQDeviceId].sensor ? settings[state.data[myQDeviceId].sensor].displayName : (state.data[myQDeviceId].threed ? settings[state.data[myQDeviceId].threed].displayName : "")
 			if (sensorName) theDoor.updateDeviceSensor( sensorName + " is closed (opening)" )
@@ -1561,6 +1583,8 @@ def sendCommand(myQDeviceId, command) {
 
 // Identify which 3D Axis is open/close
 def find3DAxis(door, command) {
+	boolean ST = atomicState.isST
+	
 	String axis = state.data[door].axis
 	String other = state.data[door].other
 	def verified = state.data[door].verified
@@ -1568,7 +1592,7 @@ def find3DAxis(door, command) {
 	if ((command == "open") && state.data[door].threed && (!axis || (axis && !verified))) {
 		def currentThreeD = [:]
 		try {
-			currentThreeD = settings[state.data[door].threed].latestValue('threeAxis')
+			currentThreeD = ST ? settings[state.data[door].threed].latestValue('threeAxis') : settings[state.data[door].threed].latestValue('threeAxis', true)
 			if (axis && (axis != "none")) {
 				// We have an axis that needs verifying - we're closed, so verify the sensor agrees
 				if (currentThreeD."${axis}".abs() < 100) {
@@ -1608,7 +1632,7 @@ def find3DAxis(door, command) {
 	} else if ((command == "close") && state.data[door].threed && (!axis || (axis && !verified))) {
 		def currentThreeD = [:]
 		try {
-			currentThreeD = settings[state.data[door].threed].latestValue('threeAxis')
+			currentThreeD = ST ? settings[state.data[door].threed].latestValue('threeAxis') : settings[state.data[door].threed].latestValue('threeAxis', true)
 			if (axis && (axis != "none")) {
 				// We have an axis that needs verifying - we're open, so verify the sensor agrees
 				if (currentThreeD."${axis}".abs() > 900) {
