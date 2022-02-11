@@ -1,5 +1,5 @@
-# MyQ-Universal
-Port of @brbeaird's MyQ Lite 3.1.0 to run on both Hubitat & SmartThings, plus the addition of Acceleration/Three Axis Sensor support
+# THIS VERSION NO LONGER WORKS ON EITHER SMARTTHINGS OR HUBITAT
+Search the SmartThings or Hubitat Community Boards for updated versions that support the latest MyQ Login Authentication methodology.
 
 ### Change Log
 #### 11/07/2019
